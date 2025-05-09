@@ -22,6 +22,7 @@ use iron::status::Status;
 use iron::{Chain, Handler, Iron, IronError, IronResult, Request, Response, Set};
 use iron_cors::CorsMiddleware;
 use lazy_static::lazy_static;
+use middlewares::CSPHeaderMiddleware;
 use mime_guess as mime_types;
 use multipart::server::{Multipart, SaveResult};
 use path_dedot::ParseDot;
@@ -102,6 +103,9 @@ fn main() {
         .arg(clap::Arg::with_name("cors")
              .long("cors")
              .help("Enable CORS via the \"Access-Control-Allow-Origin\" header"))
+        .arg(clap::Arg::with_name("allow-csp")
+            .long("allow-csp")
+            .help("Toggles header \"Allow-CSP-From\""))
         .arg(clap::Arg::with_name("coop")
              .long("coop")
              .help("Add \"Cross-Origin-Opener-Policy\" HTTP header and set it to \"same-origin\""))
@@ -234,6 +238,7 @@ fn main() {
     let cert = matches.value_of("cert");
     let certpass = matches.value_of("certpass");
     let cors = matches.is_present("cors");
+    let allow_csp = matches.is_present("allow-csp");
     let coop = matches.is_present("coop");
     let coep = matches.is_present("coep");
     let ip = matches.value_of("ip").unwrap();
@@ -296,7 +301,7 @@ fn main() {
     if !silent {
         printer
             .println_out(
-                r#"     Index: {}, Cache: {}, Cors: {}, Coop: {}, Coep: {}, Range: {}, Sort: {}, Threads: {}
+                r#"     Index: {}, Cache: {}, Cors: {}, Allow CSP: {}, Coop: {}, Coep: {}, Range: {}, Sort: {}, Threads: {}
           Upload: {}, CSRF Token: {}
           Auth: {}, Compression: {}
          https: {}, Cert: {}, Cert-Password: {}
@@ -308,6 +313,7 @@ fn main() {
                     enable_string(index),
                     enable_string(cache),
                     enable_string(cors),
+                    enable_string(allow_csp),
                     enable_string(coop),
                     enable_string(coep),
                     enable_string(range),
@@ -365,6 +371,9 @@ fn main() {
     });
     if cors {
         chain.link_around(CorsMiddleware::with_allow_any());
+    }
+    if allow_csp {
+        chain.link_after(CSPHeaderMiddleware);
     }
     if let Some(auth) = auth {
         match AuthChecker::new(auth) {
